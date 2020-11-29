@@ -1,11 +1,16 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
+from tkinter import messagebox
 import serial.tools.list_ports
 import subprocess
 import os
 import shutil
 
+def popen(command):
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.CREATE_NEW_CONSOLE
+    return subprocess.Popen(command, startupinfo=startupinfo)
 
 class Uploader:
     def __init__(self):
@@ -55,7 +60,7 @@ class Uploader:
         if self.address not in Uploader.list_addresses():
             return None
 
-        return subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return popen(command)
 
 
 class Packer:
@@ -93,14 +98,14 @@ class Packer:
         if self.dir == "":
             return None
 
-        return subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return popen(command)
 
 class Application(tk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
         self.master = master
         self.master.title("Microuploader")
-        self.master.geometry("720x510")
+        self.master.geometry("700x100")
         self.master.resizable(False, False)
         self.pack()
         self.create_widgets()
@@ -110,24 +115,6 @@ class Application(tk.Frame):
     def create_widgets(self):
         content = tk.Frame(self)
         content.grid(column=0, row=0)
-
-        output = tk.Frame(content)
-        
-        self.output_text = tk.Text(
-            output,
-            width=80, height=25
-        )
-        self.output_text.insert(tk.END, "Wyjście procesów\n")
-        self.output_text.pack(side=tk.LEFT)
-
-        scrollbar = ttk.Scrollbar(
-            output,
-            orient="vertical",
-            command=self.output_text.xview
-        )
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        output.pack(pady=10)
 
         packer_frame = tk.Frame(content, bd=1, relief="solid")
 
@@ -153,11 +140,14 @@ class Application(tk.Frame):
         modify_image["command"] = self.modify_image
         modify_image.pack(side=tk.LEFT, padx=5, pady=5)
 
-        packer_frame.pack()
+        packer_frame.pack(pady=5)
 
         upload_frame = tk.Frame(content, bd=1, relief="solid")
 
-        self.port_list = ttk.Combobox(upload_frame, width=35, values=Uploader.list_ports())
+        self.port_list = ttk.Combobox(
+            upload_frame, state="readonly", width=35,
+            values=Uploader.list_ports()
+        )
         self.port_list.set("Wybierz port")
         self.port_list.pack(side=tk.LEFT, padx=5, pady=5)
 
@@ -166,7 +156,10 @@ class Application(tk.Frame):
         refresh_port_list["command"] = self.fill_port_list
         refresh_port_list.pack(side=tk.LEFT, padx=5, pady=5)
 
-        self.address_list = ttk.Combobox(upload_frame, width=13, values=Uploader.list_addresses())
+        self.address_list = ttk.Combobox(
+            upload_frame, state="readonly", width=13,
+            values=Uploader.list_addresses()
+        )
         self.address_list.set("Wybierz adres")
         self.address_list.pack(side=tk.LEFT, padx=5, pady=5)
 
@@ -199,41 +192,36 @@ class Application(tk.Frame):
             self.packer.set_image_filename(path.name)
 
     def modify_image(self):
-        os.mkdir(self.packer.dir)
         try:
-            packer_process = self.packer.create_process(action="unpack")
-            if packer_process is not None:
-                for line in packer_process.stdout:
-                    self.output_text.insert(tk.END, line)
-            else:
-                self.output_text.insert(tk.END, "Wybierz plik\n")
-                return
+            os.mkdir(self.packer.dir)
+        except FileExistsError:
+            messagebox.showinfo(message="Usuń lub przenieś folder o nazwie 'tmp'")
+            pass
 
-            self.output_text.insert(tk.END, "Zmienianie konfiguracji wifi...\n")
-            with open(self.packer.dir + "wifisetup", "w") as f:
-                f.write(self.ssid.get() + "\t" + self.password.get())
-
-            packer_process = self.packer.create_process(action="pack")
-            if packer_process is not None:
-                for line in packer_process.stdout:
-                    self.output_text.insert(tk.END, line)
-            else:
-                self.output_text.insert(tk.END, "Wybierz plik\n")
-        finally:
+        packer_process = self.packer.create_process(action="unpack")
+        print(packer_process)
+        if packer_process is None:
+            messagebox.showinfo(message="Wybierz plik obrazu do zmodyfikowania")
             shutil.rmtree(self.packer.dir)
-    
+            return
+
+        with open(self.packer.dir + "wifisetup", "w") as f:
+            f.write(self.ssid.get() + "\t" + self.password.get())
+
+        packer_process = self.packer.create_process(action="pack")
+        packer_process.wait()
+        if packer_process is None:
+            messagebox.showinfo(message="Wybierz plik obrazu do zmodyfikowania")
+
+        shutil.rmtree(self.packer.dir)
 
     def upload(self):
         self.uploader.set_com_port(self.port_list.get())
         self.uploader.set_address(self.address_list.get())
 
-        self.output_text.insert(tk.END, "Wgrywanie...\n")
         uploader_process = self.uploader.create_process()
-        if uploader_process is not None:
-            for line in uploader_process.stdout:
-                self.output_text.insert(tk.END, line)
-        else:
-            self.output_text.insert(tk.END, "Sprawdź wprowadzone dane\n")
+        if uploader_process is None:
+            messagebox.showinfo(message="Sprawdź wprowadzone dane")
 
 
 root = tk.Tk()
