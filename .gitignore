@@ -1,0 +1,5 @@
+.git/
+deps/
+build/
+dist/
+*.bin
