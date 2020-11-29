@@ -1,5 +1,7 @@
 .git/
+__pycache__/
 deps/
 build/
 dist/
 *.bin
+*.spec
