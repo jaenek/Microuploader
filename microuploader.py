@@ -206,7 +206,7 @@ class Application(tk.Frame):
             return
 
         with open(self.packer.dir + "wifisetup", "w") as f:
-            f.write(self.ssid.get() + "\t" + self.password.get())
+            f.write(self.ssid.get() + "\n" + self.password.get())
 
         packer_process = self.packer.create_process(action="pack")
         packer_process.wait()
