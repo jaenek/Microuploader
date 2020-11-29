@@ -3,5 +3,6 @@ all:
 
 run:
     python microuploader.py
+
 release:
-    pyinstaller microuploader.py --onefile
+    pyinstaller microuploader.py --onefile --windowed
